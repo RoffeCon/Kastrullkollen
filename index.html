@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="sv"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kastrullkollen</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#0f2a5c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kastrullkollen">
+<style>
+:root{--bg:#f6f1ea;--fg:#222;--bar:#fff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1a19;--fg:#eee;--bar:#2a2826}}
+:root[data-theme="dark"]{--bg:#1b1a19;--fg:#eee;--bar:#2a2826}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:10px 14px;background:var(--bar);position:sticky;top:env(safe-area-inset-top,0px);z-index:5;box-shadow:0 1px 4px #0003}
+h1{font-size:1.2rem;margin:0;display:flex;align-items:center;gap:8px}h1 img{width:30px;height:30px;border-radius:7px}
+header button,.mr button{border:1px solid #8886;background:none;color:inherit;padding:8px 12px;font-size:.95rem;cursor:pointer;border-radius:8px}
+.seg button{border-radius:0;width:36px;height:36px;padding:0}
+.seg button.on{background:var(--fg);color:var(--bg)}
+label{font-size:.85rem;display:flex;align-items:center;gap:6px}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--s,260px),1fr));gap:12px;padding:12px}
+.card{container-type:inline-size;background:var(--c);color:#fff;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;position:relative;overflow:hidden;text-shadow:0 1px 2px #0005}
+.card.drag{opacity:.7;outline:3px dashed #fff}
+.card.done{animation:fl .6s infinite alternate}
+@keyframes fl{to{filter:brightness(1.5)}}
+.top{display:flex;gap:6px;align-items:center}
+.grip{touch-action:none;cursor:grab;font-size:1.4rem;padding:0 6px;user-select:none}
+.name{flex:1;min-width:0;background:#0003;border:0;color:#fff;font-size:1.1rem;padding:6px 8px;border-radius:8px}
+.time{font-size:22cqw;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;line-height:1.1}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center}
+.card button,.card select,.card input[type=number]{font-size:.95rem;padding:8px 10px;border-radius:8px;border:0;background:#fff;color:#222;cursor:pointer;text-shadow:none}
+.card input[type=number]{width:62px;cursor:text}
+.card input[type=color]{width:36px;height:36px;padding:0;border:0;background:none}
+.go{flex:1;font-weight:700}
+.bar{height:6px;background:#0004;border-radius:3px}.bar i{display:block;height:100%;background:#fff;border-radius:3px}
+#modal{position:fixed;inset:0;background:#0007;z-index:20;display:flex;align-items:center;justify-content:center;padding:12px}
+#modal[hidden]{display:none}
+.panel{background:var(--bar);color:var(--fg);border-radius:14px;padding:16px;width:min(560px,100%);max-height:85vh;overflow:auto}
+.panel h2{margin:0 0 6px}.hint{font-size:.85rem;opacity:.7;margin:0 0 10px}
+.mr{display:flex;gap:6px;align-items:center;margin:6px 0;flex-wrap:wrap}
+.mr input{padding:8px;border-radius:8px;border:1px solid #8886;background:var(--bg);color:var(--fg);font-size:.95rem;min-width:0}
+.mr input[type=text],.mr input:not([type]){flex:1}.mr input[type=number]{width:60px}
+</style></head><body>
+<header>
+<h1><img src="icon-192.png" alt="">Kastrullkollen</h1>
+<div class="seg" id="seg"></div>
+<label>Storlek <input type="range" id="sz" min="150" max="560" step="10"></label>
+<button id="profbtn">👤 Profiler</button>
+</header>
+<div id="grid"></div>
+<div id="modal" hidden></div>
+<script>
+const COL=['#e63946','#e07a1f','#2a9d8f','#3d7bb5','#8e5bd6','#b8860b'];
+const NAMES=['Ägg','Pasta','Kyckling','Fisk','Grönsaker','Sås'];
+const DUR=[480,600,1500,720,300,900];
+// Ljud: [frekvens, start, längd, vågform, slutfrekvens]
+const SND=[
+['Pip',[0,.25,.5].map(t=>[1000,t,.15,'square'])],
+['Klocka',[[880,0,1.2],[1320,0,.8],[660,.6,1]]],
+['Siren',[[500,0,.8,'sawtooth',1100],[500,.9,.8,'sawtooth',1100]]],
+['Melodi',[523,659,784,1047].map((f,i)=>[f,i*.22,.3,'triangle'])],
+['Ugnsding',[[1568,0,1.4],[1568,.9,1.4]]],
+['Gong',[[110,0,3],[165,0,2.5],[220,0,2],[277,0,1.5]]],
+['Fanfar',[[523,0,.2,'square'],[523,.25,.2,'square'],[523,.5,.2,'square'],[659,.75,.6,'square']]],
+['Kuckeklocka',[[784,0,.3],[622,.35,.4],[784,1,.3],[622,1.35,.4]]],
+['Dörrklocka',[[659,0,.6],[523,.6,.9]]],
+['Radar',[[1200,0,.1],[1200,.4,.1],[1200,.8,.1],[900,1.2,.5,'sine',1500]]],
+['Telefon',[[480,0,.4,'square'],[620,0,.4,'square'],[480,.5,.4,'square'],[620,.5,.4,'square']]],
+['Harpa',[523,659,784,1047,1319,1568].map((f,i)=>[f,i*.12,.9])]
+];
+const defPre=()=>[['Ägg mjukkokt',360],['Ägg medel',480],['Ägg hårdkokt',600],['Pasta',600],['Ris',720],['Potatis',1200],['Kyckling',1500],['Fisk',720],['Broccoli',300],['Te',240],['Sås',900],['Pannkakor',180]].map(([name,dur])=>({name,dur}));
+let S;try{S=JSON.parse(localStorage.getItem('kk4'))}catch(e){}
+if(!S||!S.t)S={n:4,size:260,t:[],pre:defPre(),prof:[]};
+S.pre=S.pre||defPre();S.prof=S.prof||[];
+for(let i=0;i<6;i++)if(!S.t[i])S.t[i]={id:i,name:NAMES[i],color:COL[i],dur:DUR[i],sound:i%SND.length,end:0,left:null,run:false,done:false};
+const save=()=>{try{localStorage.setItem('kk4',JSON.stringify(S))}catch(e){}};
+const $=s=>document.querySelector(s),grid=$('#grid');
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+let ac,alarms={},M=null;
+function ctx(){if(!ac){try{ac=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(ac&&ac.state==='suspended')ac.resume();return ac}
+function tone(f,t0,d,type='sine',f2){const a=ac,o=a.createOscillator(),g=a.createGain(),v=(type==='square'||type==='sawtooth')?.12:.3;o.type=type;o.frequency.setValueAtTime(f,a.currentTime+t0);if(f2)o.frequency.linearRampToValueAtTime(f2,a.currentTime+t0+d);g.gain.setValueAtTime(.0001,a.currentTime+t0);g.gain.exponentialRampToValueAtTime(v,a.currentTime+t0+.02);g.gain.exponentialRampToValueAtTime(.0001,a.currentTime+t0+d);o.connect(g).connect(a.destination);o.start(a.currentTime+t0);o.stop(a.currentTime+t0+d+.05)}
+function play(k){if(!ctx())return;(SND[k]||SND[0])[1].forEach(n=>tone(...n))}
+function startAlarm(t){stopAlarm(t);play(t.sound);alarms[t.id]=setInterval(()=>play(t.sound),2800);try{navigator.vibrate&&navigator.vibrate([300,150,300])}catch(e){}}
+function stopAlarm(t){clearInterval(alarms[t.id]);delete alarms[t.id]}
+const vis=()=>S.t.slice(0,S.n);
+const rem=t=>t.run?Math.max(0,(t.end-Date.now())/1000):(t.left??t.dur);
+const fmt=s=>{s=Math.ceil(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60,p=n=>String(n).padStart(2,'0');return(h?h+':':'')+p(m)+':'+p(x)};
+const clear=t=>{t.run=false;t.done=false;t.left=null;stopAlarm(t)};
+function render(){
+$('#seg').innerHTML=[1,2,3,4,5,6].map(n=>`<button data-n="${n}" class="${n===S.n?'on':''}">${n}</button>`).join('');
+$('#sz').value=S.size;grid.style.setProperty('--s',S.size+'px');
+grid.innerHTML=vis().map(t=>`<div class="card ${t.done?'done':''}" data-id="${t.id}" style="--c:${t.color}">
+<div class="top"><span class="grip" title="Dra för att flytta">⠿</span><input class="name" data-f="name" value="${esc(t.name)}" aria-label="Namn"><input type="color" data-f="color" value="${t.color}" aria-label="Färg"></div>
+<div class="time">${fmt(rem(t))}</div>
+<div class="bar"><i style="width:${100*rem(t)/t.dur}%"></i></div>
+<div class="row"><button class="go" data-a="go">${t.run?'⏸ Paus':t.done?'■ Tysta':'▶ Start'}</button><button data-a="reset" title="Nollställ">↺</button><button data-a="pre" title="Förval">📋</button></div>
+<div class="row"><input type="number" min="0" max="999" data-f="m" value="${Math.floor(t.dur/60)}" aria-label="Minuter">:<input type="number" min="0" max="59" data-f="s" value="${t.dur%60}" aria-label="Sekunder">
+<select data-f="sound">${SND.map((n,i)=>`<option value="${i}" ${i===t.sound?'selected':''}>${n[0]}</option>`).join('')}</select><button data-a="test" title="Provlyssna">🔔</button></div></div>`).join('');}
+const get=e=>S.t.find(t=>t.id==e.closest('.card').dataset.id);
+grid.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const t=get(b),a=b.dataset.a;ctx();
+if(a==='pre'){M={type:'pre',id:t.id};mrender();return}
+if(a==='go'){if(t.done)clear(t);else if(t.run){t.left=rem(t);t.run=false}else{t.left=t.left??t.dur;if(t.left<=0)t.left=t.dur;t.end=Date.now()+t.left*1000;t.run=true;wl()}}
+if(a==='reset')clear(t);
+if(a==='test')play(t.sound);
+save();render()});
+grid.addEventListener('change',e=>{const i=e.target,f=i.dataset.f;if(!f)return;const t=get(i),c=i.closest('.card');
+if(f==='name')t.name=i.value;if(f==='color'){t.color=i.value;c.style.setProperty('--c',i.value)}
+if(f==='sound'){t.sound=+i.value;ctx();play(t.sound)}
+if(f==='m'||f==='s'){const m=+c.querySelector('[data-f=m]').value||0,s=+c.querySelector('[data-f=s]').value||0;t.dur=Math.max(1,m*60+s);if(!t.run){clear(t);render()}}
+save()});
+$('#seg').addEventListener('click',e=>{const n=e.target.dataset.n;if(n){S.n=+n;save();render()}});
+$('#sz').addEventListener('input',e=>{S.size=+e.target.value;grid.style.setProperty('--s',S.size+'px');save()});
+$('#profbtn').onclick=()=>{M={type:'prof'};mrender()};
+// Modal: förval och profiler
+function mrender(){const m=$('#modal');if(!M){m.hidden=true;return}m.hidden=false;let h='';
+if(M.type==='pre'){h=`<h2>Förval</h2><p class="hint">Ändra namn och tid direkt i listan. "Använd" lägger förvalet på timern.</p>`+S.pre.map((p,i)=>`<div class="mr" data-i="${i}"><input type="text" data-g="name" value="${esc(p.name)}"><input type="number" min="0" max="999" data-g="m" value="${Math.floor(p.dur/60)}">:<input type="number" min="0" max="59" data-g="s" value="${p.dur%60}"><button data-b="use">Använd</button><button data-b="del" title="Ta bort">🗑</button></div>`).join('')+`<div class="mr"><button data-b="add">+ Nytt förval</button><button data-b="fromTimer">Spara timern som förval</button><button data-b="resetPre">Återställ standard</button></div>`}
+else{h=`<h2>Profiler</h2><p class="hint">En profil sparar antal rätter samt namn, tid, färg och ljud för varje timer. Spara med samma namn för att uppdatera en profil.</p>`+(S.prof.length?S.prof.map((p,i)=>`<div class="mr" data-i="${i}"><b style="flex:1">${esc(p.name)}</b><span class="hint" style="margin:0">${p.t.length} ${p.t.length>1?'rätter':'rätt'}</span><button data-b="load">Ladda</button><button data-b="delp" title="Ta bort">🗑</button></div>`).join(''):'<p class="hint">Inga profiler ännu.</p>')+`<div class="mr"><input type="text" id="pn" placeholder="Profilnamn, t.ex. Söndagsmiddag"><button data-b="saveprof">Spara nuvarande</button></div>`}
+m.innerHTML=`<div class="panel">${h}<div class="mr"><button data-b="close">Stäng</button></div></div>`}
+$('#modal').addEventListener('click',e=>{if(e.target.id==='modal'){M=null;mrender();return}
+const b=e.target.closest('button');if(!b)return;const k=b.dataset.b,i=+(b.closest('[data-i]')||{dataset:{}}).dataset.i,t=M&&M.id!=null?S.t.find(x=>x.id===M.id):null;
+if(k==='close')M=null;
+if(k==='use'){const p=S.pre[i];t.name=p.name;t.dur=p.dur;clear(t);M=null;render()}
+if(k==='del')S.pre.splice(i,1);
+if(k==='add')S.pre.push({name:'Nytt förval',dur:300});
+if(k==='fromTimer')S.pre.push({name:t.name,dur:t.dur});
+if(k==='resetPre')S.pre=defPre();
+if(k==='saveprof'){const n=$('#pn').value.trim()||'Profil '+(S.prof.length+1),p={name:n,n:S.n,t:vis().map(t=>({name:t.name,color:t.color,dur:t.dur,sound:t.sound}))},j=S.prof.findIndex(x=>x.name===n);if(j>=0)S.prof[j]=p;else S.prof.push(p)}
+if(k==='delp')S.prof.splice(i,1);
+if(k==='load'){const p=S.prof[i];if(S.t.some(x=>x.run)&&!confirm('Pågående timers stoppas. Ladda profilen?'))return;S.t.forEach(clear);p.t.forEach((d,j)=>Object.assign(S.t[j],d));S.n=p.t.length;M=null;render()}
+save();mrender()});
+$('#modal').addEventListener('change',e=>{const g=e.target.dataset.g;if(!g)return;const r=e.target.closest('[data-i]'),p=S.pre[+r.dataset.i];
+if(g==='name')p.name=e.target.value;else p.dur=Math.max(1,(+r.querySelector('[data-g=m]').value||0)*60+(+r.querySelector('[data-g=s]').value||0));save()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&M){M=null;mrender()}});
+// Dra och släpp (pekare: mus och touch)
+let dc=null;
+grid.addEventListener('pointerdown',e=>{const g=e.target.closest('.grip');if(!g)return;dc=g.closest('.card');dc.classList.add('drag');g.setPointerCapture(e.pointerId);e.preventDefault()});
+grid.addEventListener('pointermove',e=>{if(!dc)return;const o=document.elementFromPoint(e.clientX,e.clientY),c=o&&o.closest('.card');if(!c||c===dc)return;
+const k=[...grid.children];grid.insertBefore(dc,k.indexOf(dc)<k.indexOf(c)?c.nextSibling:c)});
+const endDrag=()=>{if(!dc)return;dc.classList.remove('drag');dc=null;const ids=[...grid.children].map(c=>+c.dataset.id);S.t=[...ids.map(i=>S.t.find(t=>t.id===i)),...S.t.filter(t=>!ids.includes(t.id))];save()};
+grid.addEventListener('pointerup',endDrag);grid.addEventListener('pointercancel',endDrag);
+// Tick
+setInterval(()=>{let ch=false;for(const t of S.t){if(t.run&&rem(t)<=0){t.run=false;t.done=true;t.left=0;startAlarm(t);ch=true}}
+if(ch){save();render();return}
+document.querySelectorAll('.card').forEach(c=>{const t=S.t.find(x=>x.id==c.dataset.id),r=rem(t);c.querySelector('.time').textContent=fmt(r);c.querySelector('.bar i').style.width=100*r/t.dur+'%'})},250);
+async function wl(){try{if('wakeLock'in navigator)await navigator.wakeLock.request('screen')}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.t.some(t=>t.run))wl()});
+if('serviceWorker'in navigator&&location.protocol.startsWith('http'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+render();
+</script></body></html>
